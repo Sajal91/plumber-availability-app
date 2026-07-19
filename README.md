@@ -1,16 +1,16 @@
 # Plumber Availability Tracker
 
-Real-time plumber availability tracking platform — MVP for client demo.
+Real-time plumber availability tracking platform with a single mobile app for admins and plumbers.
 
-- **Backend:** Node.js + Express + MongoDB + Socket.io + JWT
-- **Mobile:** Expo (React Native) with Expo Go support
+- **Backend:** Node.js + Express + MongoDB + Socket.io + JWT + OTP auth
+- **Mobile:** Expo (React Native) — admins and plumbers both login via phone + OTP
 
 ## Project Structure
 
 ```
 plumber-availability-app/
-├── backend/          # Express API server
-└── mobile/           # Expo React Native app
+├── backend/          # Express API
+└── mobile/           # Expo app (admin + plumber)
 ```
 
 ---
@@ -18,9 +18,9 @@ plumber-availability-app/
 ## Prerequisites
 
 - [Node.js](https://nodejs.org/) (v18+)
-- [MongoDB](https://www.mongodb.com/) running locally or a MongoDB Atlas connection string
-- [Expo Go](https://expo.dev/go) app on your physical phone (iOS/Android)
-- Phone and computer on the **same Wi-Fi network**
+- [MongoDB](https://www.mongodb.com/) running locally or MongoDB Atlas
+- [Expo Go](https://expo.dev/go) on your phone
+- Phone and computer on the **same Wi-Fi network** (for mobile testing)
 
 ---
 
@@ -35,53 +35,45 @@ npm install
 
 ### 2. Configure environment
 
-Copy `.env.example` to `.env` (or edit the existing `.env`):
+Copy `.env.example` to `.env`:
 
 ```env
 MONGO_URI=mongodb://localhost:27017/plumber-availability
 JWT_SECRET=your-super-secret-jwt-key-change-this
 PORT=5000
+OTP_DEV_MODE=true
 ```
 
-For MongoDB Atlas, use your Atlas connection string as `MONGO_URI`.
+Set `OTP_DEV_MODE=true` during development to return the OTP in API responses and log it in the server console. Disable in production and integrate an SMS provider in `backend/src/services/otpService.js`.
 
-### 3. Start the server
+### 3. Seed users
 
 ```bash
-# Development (auto-restart on changes)
+npm run seed
+```
+
+This creates:
+
+| Role | Name | Phone |
+|------|------|-------|
+| Admin | Admin | 9999999999 |
+| Plumber | John Plumber | 9876543210 |
+| Plumber | Mike Plumber | 9876543211 |
+| Plumber | Sarah Plumber | 9876543212 |
+
+Users must be pre-created by an admin/seed — there is no self-registration.
+
+### 4. Start the server
+
+```bash
 npm run dev
-
-# Production
-npm start
 ```
 
-Server runs at `http://0.0.0.0:5000`. Verify with:
-
-```bash
-curl http://localhost:5000/api/health
-```
-
-### API Endpoints
-
-| Method | Endpoint | Auth | Description |
-|--------|----------|------|-------------|
-| POST | `/api/auth/register` | No | Register (name, phoneNumber, password) |
-| POST | `/api/auth/login` | No | Login (phoneNumber, password) → JWT |
-| GET | `/api/users/all` | Yes | Get all users with status |
-| PUT | `/api/users/status` | Yes | Update status (`available`, `working`, `offline`) |
-
-**Auth header:** `Authorization: Bearer <token>`
-
-### Socket.io Events
-
-| Event | Direction | Payload |
-|-------|-----------|---------|
-| `usersList` | Server → Client | Full user list on connect |
-| `statusUpdated` | Server → All Clients | `{ user, users }` on status change |
+Server runs at `http://localhost:5000`.
 
 ---
 
-## Mobile App Setup
+## Mobile App
 
 ### 1. Install dependencies
 
@@ -92,16 +84,13 @@ npm install
 
 ### 2. Configure API URL
 
-Edit `mobile/src/config/config.js` and set `API_END_POINT` to your computer's LAN IP:
+Set `EXPO_PUBLIC_API_END_POINT` in `mobile/.env`:
 
-```js
-const API_END_POINT = '192.168.1.100'; // your machine's IP
+```env
+EXPO_PUBLIC_API_END_POINT=http://192.168.1.100:5000
 ```
 
-**Find your IP:**
-- **Windows:** `ipconfig` → look for IPv4 Address under your Wi-Fi adapter
-- **Mac:** `ifconfig en0 | grep inet`
-- **Linux:** `ip addr` or `hostname -I`
+Use your computer's LAN IP (not `localhost`).
 
 ### 3. Start Expo
 
@@ -109,20 +98,43 @@ const API_END_POINT = '192.168.1.100'; // your machine's IP
 npm start
 ```
 
-Scan the QR code with **Expo Go** on your phone.
+Scan the QR code with **Expo Go**.
 
-> **Tip:** If the app can't connect, ensure Windows Firewall allows inbound connections on port 5000, and that both devices are on the same network.
+### Login (admin & plumber)
+
+1. Enter registered phone number
+2. Send OTP → verify (check server console if `OTP_DEV_MODE=true`)
+3. App opens the correct screen based on role:
+
+| Role | Screen |
+|------|--------|
+| **Admin** | Plumber list with live status, stats, and **Call** buttons |
+| **Plumber** | Own status only — Available, Working, or Offline |
+
+Plumbers cannot see other plumbers. Admins see all plumbers but cannot update status.
 
 ---
 
-## Demo Flow
+## API Endpoints
 
-1. Start MongoDB and the backend server
-2. Update `API_END_POINT` in the mobile config
-3. Start Expo and open the app on your phone
-4. Register 2+ plumber accounts (use different phones or register/logout)
-5. On the dashboard, tap **Available** or **Working** — all connected clients see updates instantly
-6. Tap **Call** on any plumber to open the native phone dialer
+| Method | Endpoint | Auth | Role | Description |
+|--------|----------|------|------|-------------|
+| POST | `/api/auth/send-otp` | No | — | Send OTP to registered phone |
+| POST | `/api/auth/verify-otp` | No | — | Verify OTP → JWT |
+| GET | `/api/users/me` | Yes | Any | Current user profile |
+| GET | `/api/users/plumbers` | Yes | Admin | All plumbers with status |
+| PUT | `/api/users/status` | Yes | Plumber | Update own status |
+
+**Auth header:** `Authorization: Bearer <token>`
+
+---
+
+## Socket.io Events
+
+| Event | Direction | Payload |
+|-------|-----------|---------|
+| `plumbersList` | Server → Client | Full plumber list on connect |
+| `statusUpdated` | Server → All | `{ user, plumbers }` on status change |
 
 ---
 
@@ -140,7 +152,6 @@ Scan the QR code with **Expo Go** on your phone.
 
 | Issue | Fix |
 |-------|-----|
-| "Cannot reach server" on mobile | Check `API_END_POINT`, backend running, same Wi-Fi, firewall |
-| MongoDB connection error | Ensure MongoDB is running; verify `MONGO_URI` |
-| Socket not updating | Confirm backend is on `0.0.0.0`, not `localhost` only |
-| 401 Unauthorized | Token expired (7 days) — log in again |
+| "Phone number not registered" | Run `npm run seed` in backend |
+| OTP not received | Check server console; enable `OTP_DEV_MODE=true` |
+| Cannot reach server on mobile | Check `EXPO_PUBLIC_API_END_POINT`, same Wi-Fi, firewall |

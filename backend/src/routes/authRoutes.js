@@ -1,24 +1,30 @@
 const express = require('express');
 const { body } = require('express-validator');
-const { register, login } = require('../controllers/authController');
+const { sendOtp, verifyOtp } = require('../controllers/authController');
 const validate = require('../middleware/validate');
 
 const router = express.Router();
 
-const registerValidation = [
-  body('name').trim().notEmpty().withMessage('Name is required'),
-  body('phoneNumber').trim().notEmpty().withMessage('Phone number is required'),
-  body('password')
-    .isLength({ min: 6 })
-    .withMessage('Password must be at least 6 characters'),
+const phoneValidation = body('phoneNumber')
+  .trim()
+  .notEmpty()
+  .withMessage('Phone number is required')
+  .matches(/^[0-9+\-\s()]{7,15}$/)
+  .withMessage('Enter a valid phone number');
+
+const sendOtpValidation = [phoneValidation];
+
+const verifyOtpValidation = [
+  phoneValidation,
+  body('otp')
+    .trim()
+    .notEmpty()
+    .withMessage('OTP is required')
+    .isLength({ min: 6, max: 6 })
+    .withMessage('OTP must be 6 digits'),
 ];
 
-const loginValidation = [
-  body('phoneNumber').trim().notEmpty().withMessage('Phone number is required'),
-  body('password').notEmpty().withMessage('Password is required'),
-];
-
-router.post('/register', registerValidation, validate, register);
-router.post('/login', loginValidation, validate, login);
+router.post('/send-otp', sendOtpValidation, validate, sendOtp);
+router.post('/verify-otp', verifyOtpValidation, validate, verifyOtp);
 
 module.exports = router;

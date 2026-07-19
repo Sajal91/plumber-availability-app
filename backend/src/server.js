@@ -9,12 +9,12 @@ const connectDB = require('./config/db');
 const authRoutes = require('./routes/authRoutes');
 const userRoutes = require('./routes/userRoutes');
 const errorHandler = require('./middleware/errorHandler');
-const { getAllUsersPublic } = require('./services/userService');
+const { getAllPlumbersPublic } = require('./services/userService');
 
 const app = express();
 const server = http.createServer(app);
+const NOTIFICATION_INTERVAL_MS = 5000;
 
-// Socket.io — allow connections from Expo Go on local network
 const io = new Server(server, {
   cors: {
     origin: '*',
@@ -24,43 +24,58 @@ const io = new Server(server, {
 
 app.set('io', io);
 
-// Middleware
 app.use(cors());
 app.use(express.json());
 
-// Health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', message: 'Plumber Availability API is running' });
 });
 
-// Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 
-// 404 handler
 app.use((req, res) => {
   res.status(404).json({ message: 'Route not found' });
 });
 
-// Global error handler
 app.use(errorHandler);
 
-// Socket.io connection handling
 io.on('connection', async (socket) => {
   console.log(`Client connected: ${socket.id}`);
 
-  // Send current user list to newly connected client
   try {
-    const users = await getAllUsersPublic();
-    socket.emit('usersList', users);
+    const plumbers = await getAllPlumbersPublic();
+    socket.emit('plumbersList', plumbers);
   } catch (error) {
-    console.error('Failed to send initial users list:', error.message);
+    console.error('Failed to send initial plumbers list:', error.message);
   }
 
   socket.on('disconnect', () => {
     console.log(`Client disconnected: ${socket.id}`);
   });
 });
+
+const startNotificationLoop = () => {
+  setInterval(async () => {
+    if (io.engine.clientsCount === 0) {
+      return;
+    }
+
+    try {
+      const plumbers = await getAllPlumbersPublic();
+      const availableCount = plumbers.filter((user) => user.status === 'available').length;
+      const workingCount = plumbers.filter((user) => user.status === 'working').length;
+
+      io.emit('notification', {
+        title: 'Availability Update',
+        message: `${availableCount} available, ${workingCount} working`,
+        sentAt: new Date().toISOString(),
+      });
+    } catch (error) {
+      console.error('Failed to send availability notification:', error.message);
+    }
+  }, NOTIFICATION_INTERVAL_MS);
+};
 
 const PORT = process.env.PORT || 5000;
 
@@ -72,8 +87,9 @@ const startServer = async () => {
 
   await connectDB();
 
-  server.listen(PORT, process.env.CLIENT_URL, () => {
-    console.log(`Server running on ${process.env.CLIENT_URL}`);
+  server.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+    startNotificationLoop();
   });
 };
 

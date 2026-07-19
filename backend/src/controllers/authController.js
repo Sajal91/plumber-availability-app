@@ -1,55 +1,75 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const {
+  generateOtp,
+  getOtpExpiry,
+  isOtpExpired,
+  sendOtpSms,
+} = require('../services/otpService');
 
-/**
- * Generate a JWT token for the given user ID.
- */
 const generateToken = (userId) => {
   return jwt.sign({ userId }, process.env.JWT_SECRET, { expiresIn: '7d' });
 };
 
-/**
- * POST /api/auth/register
- */
-const register = async (req, res, next) => {
-  try {
-    const { name, phoneNumber, password } = req.body;
+const exposeDevOtp = () => process.env.OTP_DEV_MODE === 'true';
 
-    const existingUser = await User.findOne({ phoneNumber });
-    if (existingUser) {
-      return res.status(409).json({ message: 'Phone number already registered' });
+/**
+ * POST /api/auth/send-otp
+ */
+const sendOtp = async (req, res, next) => {
+  try {
+    const { phoneNumber } = req.body;
+
+    const user = await User.findOne({ phoneNumber }).select('+otp +otpExpires');
+    if (!user) {
+      console.log('Phone number not registered. Contact admin')
+      return res.status(404).json({ message: 'Phone number not registered. Contact admin.' });
     }
 
-    const user = await User.create({ name, phoneNumber, password });
+    const otp = generateOtp();
+    user.otp = otp;
+    user.otpExpires = getOtpExpiry();
+    await user.save();
 
-    const token = generateToken(user._id);
+    await sendOtpSms(phoneNumber, otp);
 
-    res.status(201).json({
-      message: 'Registration successful',
-      token,
-      user: user.toPublicJSON(),
-    });
+    const response = {
+      message: 'OTP sent successfully',
+    };
+
+    if (exposeDevOtp()) {
+      response.devOtp = otp;
+    }
+
+    res.json(response);
   } catch (error) {
     next(error);
   }
 };
 
 /**
- * POST /api/auth/login
+ * POST /api/auth/verify-otp
  */
-const login = async (req, res, next) => {
+const verifyOtp = async (req, res, next) => {
   try {
-    const { phoneNumber, password } = req.body;
+    const { phoneNumber, otp } = req.body;
 
-    const user = await User.findOne({ phoneNumber });
+    const user = await User.findOne({ phoneNumber }).select('+otp +otpExpires');
     if (!user) {
-      return res.status(401).json({ message: 'Invalid phone number or password' });
+      return res.status(401).json({ message: 'Invalid phone number or OTP' });
     }
 
-    const isMatch = await user.comparePassword(password);
-    if (!isMatch) {
-      return res.status(401).json({ message: 'Invalid phone number or password' });
+    if (!user.otp || user.otp !== otp) {
+      return res.status(401).json({ message: 'Invalid phone number or OTP' });
     }
+
+    if (isOtpExpired(user.otpExpires)) {
+      return res.status(401).json({ message: 'OTP expired. Please request a new one.' });
+    }
+
+    user.otp = undefined;
+    user.otpExpires = undefined;
+    await user.save();
 
     const token = generateToken(user._id);
 
@@ -64,6 +84,6 @@ const login = async (req, res, next) => {
 };
 
 module.exports = {
-  register,
-  login,
+  sendOtp,
+  verifyOtp,
 };

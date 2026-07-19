@@ -1,23 +1,32 @@
 const User = require('../models/User');
 const { STATUS_VALUES } = require('../models/User');
-const { getAllUsersPublic } = require('../services/userService');
+const { getAllPlumbersPublic } = require('../services/userService');
 
 /**
- * GET /api/users/all
- * Return all users with their current status.
+ * GET /api/users/plumbers — admin only
  */
-const getAllUsers = async (req, res, next) => {
+const getAllPlumbers = async (req, res, next) => {
   try {
-    const users = await getAllUsersPublic();
-    res.json({ users });
+    const plumbers = await getAllPlumbersPublic();
+    res.json({ plumbers });
   } catch (error) {
     next(error);
   }
 };
 
 /**
- * PUT /api/users/status
- * Update the logged-in user's availability status.
+ * GET /api/users/me — current user profile
+ */
+const getMe = async (req, res, next) => {
+  try {
+    res.json({ user: req.user.toPublicJSON() });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * PUT /api/users/status — plumbers only
  */
 const updateStatus = async (req, res, next) => {
   try {
@@ -40,18 +49,16 @@ const updateStatus = async (req, res, next) => {
     await user.save();
 
     const updatedUser = user.toPublicJSON();
-    const allUsers = await getAllUsersPublic();
+    const allPlumbers = await getAllPlumbersPublic();
 
-    // Emit real-time update via Socket.io
     const io = req.app.get('io');
     if (io) {
-      io.emit('statusUpdated', { user: updatedUser, users: allUsers });
+      io.emit('statusUpdated', { user: updatedUser, plumbers: allPlumbers });
     }
 
     res.json({
       message: 'Status updated successfully',
       user: updatedUser,
-      users: allUsers,
     });
   } catch (error) {
     next(error);
@@ -59,6 +66,7 @@ const updateStatus = async (req, res, next) => {
 };
 
 module.exports = {
-  getAllUsers,
+  getAllPlumbers,
+  getMe,
   updateStatus,
 };

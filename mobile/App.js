@@ -14,7 +14,7 @@ export default function App() {
     const restoreSession = async () => {
       try {
         const user = await getUser();
-        if (user) {
+        if (user && (user.role === 'plumber' || user.role === 'admin')) {
           setCurrentUser(user);
           setIsAuthenticated(true);
         }

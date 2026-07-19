@@ -12,8 +12,11 @@ export const connectSocket = () => {
   }
 
   socket = io(SOCKET_URL, {
-    transports: ['websocket'],
+    transports: ['websocket', 'polling'],
     autoConnect: true,
+    extraHeaders: {
+      'ngrok-skip-browser-warning': 'true',
+    },
   });
 
   return socket;

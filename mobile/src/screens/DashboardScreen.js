@@ -1,55 +1,37 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  FlatList,
   Pressable,
   RefreshControl,
+  ScrollView,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
-import UserListItem from '../components/UserListItem';
 import { COLORS, STATUS_COLORS } from '../constants/colors';
-import { getAllUsers, updateStatus, getErrorMessage } from '../services/api';
+import { getMe, updateStatus, getErrorMessage } from '../services/api';
 import { connectSocket, disconnectSocket, getSocket } from '../services/socket';
 import { clearAuth, getToken, saveAuth } from '../services/authStorage';
 
 export default function DashboardScreen({ currentUser, onUserUpdate, onLogout }) {
-  const [users, setUsers] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [pendingStatus, setPendingStatus] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
 
-  const fetchUsers = useCallback(async () => {
+  const refreshProfile = useCallback(async () => {
     try {
-      const response = await getAllUsers();
-      setUsers(response.data.users);
+      const response = await getMe();
+      onUserUpdate(response.data.user);
       setError('');
     } catch (err) {
       setError(getErrorMessage(err));
     }
-  }, []);
+  }, [onUserUpdate]);
 
   useEffect(() => {
-    const init = async () => {
-      setLoading(true);
-      await fetchUsers();
-      setLoading(false);
-    };
-
-    init();
-
     const socket = connectSocket();
 
-    socket.on('usersList', (usersList) => {
-      setUsers(usersList);
-    });
-
-    socket.on('statusUpdated', ({ user: updatedUser, users: updatedUsers }) => {
-      if (updatedUsers) {
-        setUsers(updatedUsers);
-      }
+    socket.on('statusUpdated', ({ user: updatedUser }) => {
       if (updatedUser && updatedUser.id === currentUser.id) {
         onUserUpdate(updatedUser);
       }
@@ -58,12 +40,11 @@ export default function DashboardScreen({ currentUser, onUserUpdate, onLogout })
     return () => {
       const activeSocket = getSocket();
       if (activeSocket) {
-        activeSocket.off('usersList');
         activeSocket.off('statusUpdated');
       }
       disconnectSocket();
     };
-  }, [fetchUsers, currentUser.id, onUserUpdate]);
+  }, [currentUser.id, onUserUpdate]);
 
   const handleStatusChange = async (status) => {
     if (pendingStatus || currentUser.status === status) return;
@@ -72,7 +53,6 @@ export default function DashboardScreen({ currentUser, onUserUpdate, onLogout })
     setError('');
     try {
       const response = await updateStatus(status);
-      setUsers(response.data.users);
       const updatedUser = response.data.user;
       onUserUpdate(updatedUser);
       const token = await getToken();
@@ -88,7 +68,7 @@ export default function DashboardScreen({ currentUser, onUserUpdate, onLogout })
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    await fetchUsers();
+    await refreshProfile();
     setRefreshing(false);
   };
 
@@ -100,12 +80,14 @@ export default function DashboardScreen({ currentUser, onUserUpdate, onLogout })
 
   const currentStatusColor = STATUS_COLORS[currentUser.status] || STATUS_COLORS.offline;
 
-  const renderUser = ({ item }) => (
-    <UserListItem user={item} isCurrentUser={item.id === currentUser.id} />
-  );
-
   return (
-    <View style={styles.container}>
+    <ScrollView
+      style={styles.container}
+      contentContainerStyle={styles.content}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+      }
+    >
       <View style={styles.header}>
         <View>
           <Text style={styles.greeting}>Hello, {currentUser.name}</Text>
@@ -120,6 +102,10 @@ export default function DashboardScreen({ currentUser, onUserUpdate, onLogout })
 
       <View style={styles.statusSection}>
         <Text style={styles.sectionTitle}>Update Your Status</Text>
+        <Text style={styles.sectionHint}>
+          Set your availability so the admin team can assign jobs.
+        </Text>
+
         <View style={styles.statusButtons}>
           <Pressable
             style={[
@@ -153,31 +139,25 @@ export default function DashboardScreen({ currentUser, onUserUpdate, onLogout })
             )}
           </Pressable>
         </View>
+
+        <Pressable
+          style={[
+            styles.offlineButton,
+            currentUser.status === 'offline' && styles.offlineButtonActive,
+          ]}
+          onPress={() => handleStatusChange('offline')}
+          disabled={!!pendingStatus}
+        >
+          {pendingStatus === 'offline' ? (
+            <ActivityIndicator color={COLORS.textSecondary} size="small" />
+          ) : (
+            <Text style={styles.offlineButtonText}>Go Offline</Text>
+          )}
+        </Pressable>
       </View>
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
-
-      <Text style={styles.sectionTitle}>All Plumbers</Text>
-
-      {loading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={COLORS.primary} />
-        </View>
-      ) : (
-        <FlatList
-          data={users}
-          keyExtractor={(item) => item.id}
-          renderItem={renderUser}
-          contentContainerStyle={styles.listContent}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
-          }
-          ListEmptyComponent={
-            <Text style={styles.emptyText}>No plumbers registered yet.</Text>
-          }
-        />
-      )}
-    </View>
+    </ScrollView>
   );
 }
 
@@ -185,8 +165,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.background,
+  },
+  content: {
     padding: 20,
     paddingTop: 56,
+    paddingBottom: 40,
   },
   header: {
     flexDirection: 'row',
@@ -221,7 +204,6 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.surface,
     borderRadius: 16,
     padding: 20,
-    marginBottom: 20,
     borderWidth: 1,
     borderColor: COLORS.border,
   },
@@ -229,11 +211,18 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: COLORS.text,
-    marginBottom: 12,
+    marginBottom: 6,
+  },
+  sectionHint: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    marginBottom: 16,
+    lineHeight: 20,
   },
   statusButtons: {
     flexDirection: 'row',
     gap: 12,
+    marginBottom: 12,
   },
   statusButton: {
     flex: 1,
@@ -258,18 +247,21 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 15,
   },
-  listContent: {
-    paddingBottom: 24,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
+  offlineButton: {
+    padding: 14,
+    borderRadius: 10,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.background,
   },
-  emptyText: {
-    textAlign: 'center',
+  offlineButtonActive: {
+    borderColor: STATUS_COLORS.offline,
+    backgroundColor: '#F1F5F9',
+  },
+  offlineButtonText: {
     color: COLORS.textSecondary,
-    marginTop: 32,
+    fontWeight: '600',
     fontSize: 15,
   },
   error: {
@@ -277,7 +269,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FEE2E2',
     padding: 12,
     borderRadius: 8,
-    marginBottom: 16,
+    marginTop: 16,
     fontSize: 14,
   },
 });

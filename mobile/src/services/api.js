@@ -7,10 +7,10 @@ const api = axios.create({
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json',
+    'ngrok-skip-browser-warning': 'true',
   },
 });
 
-// Attach JWT token to protected requests
 api.interceptors.request.use(async (config) => {
   const token = await getToken();
   if (token) {
@@ -19,19 +19,18 @@ api.interceptors.request.use(async (config) => {
   return config;
 });
 
-export const register = (name, phoneNumber, password) =>
-  api.post('/auth/register', { name, phoneNumber, password });
+export const sendOtp = (phoneNumber) =>
+  api.post('/auth/send-otp', { phoneNumber });
 
-export const login = (phoneNumber, password) =>
-  api.post('/auth/login', { phoneNumber, password });
+export const verifyOtp = (phoneNumber, otp) =>
+  api.post('/auth/verify-otp', { phoneNumber, otp });
 
-export const getAllUsers = () => api.get('/users/all');
+export const getMe = () => api.get('/users/me');
+
+export const getPlumbers = () => api.get('/users/plumbers');
 
 export const updateStatus = (status) => api.put('/users/status', { status });
 
-/**
- * Extract a user-friendly error message from an API error response.
- */
 export const getErrorMessage = (error) => {
   if (error.response?.data?.message) {
     return error.response.data.message;

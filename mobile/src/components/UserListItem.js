@@ -7,7 +7,7 @@ const STATUS_LABELS = {
   offline: 'Offline',
 };
 
-export default function UserListItem({ user, isCurrentUser }) {
+export default function UserListItem({ user, isCurrentUser = false }) {
   const statusColor = STATUS_COLORS[user.status] || STATUS_COLORS.offline;
 
   const handleCall = () => {

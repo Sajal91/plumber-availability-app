@@ -9,27 +9,50 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { login as loginApi, getErrorMessage } from '../services/api';
+import { sendOtp, verifyOtp, getErrorMessage } from '../services/api';
 import { saveAuth } from '../services/authStorage';
 import { COLORS } from '../constants/colors';
 
-export default function LoginScreen({ navigation, onLoginSuccess }) {
+export default function LoginScreen({ onLoginSuccess }) {
+  const [step, setStep] = useState('phone');
   const [phoneNumber, setPhoneNumber] = useState('');
-  const [password, setPassword] = useState('');
+  const [otp, setOtp] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const handleLogin = async () => {
+  const handleSendOtp = async () => {
     setError('');
 
-    if (!phoneNumber.trim() || !password) {
-      setError('Please enter phone number and password');
+    if (!phoneNumber.trim()) {
+      setError('Please enter your mobile number');
       return;
     }
 
     setLoading(true);
     try {
-      const response = await loginApi(phoneNumber.trim(), password);
+      const response = await sendOtp(phoneNumber.trim());
+      if (response.data.devOtp) {
+        setOtp(response.data.devOtp);
+      }
+      setStep('otp');
+    } catch (err) {
+      setError(getErrorMessage(err));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyOtp = async () => {
+    setError('');
+
+    if (!otp.trim() || otp.trim().length !== 6) {
+      setError('Please enter the 6-digit OTP');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const response = await verifyOtp(phoneNumber.trim(), otp.trim());
       const { token, user } = response.data;
       await saveAuth(token, user);
       onLoginSuccess(user);
@@ -47,46 +70,73 @@ export default function LoginScreen({ navigation, onLoginSuccess }) {
     >
       <View style={styles.card}>
         <Text style={styles.title}>Plumber Tracker</Text>
-        <Text style={styles.subtitle}>Sign in to manage availability</Text>
+        <Text style={styles.subtitle}>Sign in with mobile number & OTP</Text>
 
         {error ? <Text style={styles.error}>{error}</Text> : null}
 
-        <Text style={styles.label}>Phone Number</Text>
-        <TextInput
-          style={styles.input}
-          value={phoneNumber}
-          onChangeText={setPhoneNumber}
-          placeholder="Enter phone number"
-          keyboardType="phone-pad"
-          autoCapitalize="none"
-        />
+        {step === 'phone' ? (
+          <>
+            <Text style={styles.label}>Mobile Number</Text>
+            <TextInput
+              style={styles.input}
+              value={phoneNumber}
+              onChangeText={setPhoneNumber}
+              placeholder="Enter mobile number"
+              keyboardType="phone-pad"
+              autoCapitalize="none"
+            />
 
-        <Text style={styles.label}>Password</Text>
-        <TextInput
-          style={styles.input}
-          value={password}
-          onChangeText={setPassword}
-          placeholder="Enter password"
-          secureTextEntry
-        />
+            <Pressable
+              style={[styles.button, loading && styles.buttonDisabled]}
+              onPress={handleSendOtp}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator color={COLORS.white} />
+              ) : (
+                <Text style={styles.buttonText}>Send OTP</Text>
+              )}
+            </Pressable>
+          </>
+        ) : (
+          <>
+            <Text style={styles.otpHint}>OTP sent to {phoneNumber}</Text>
 
-        <Pressable
-          style={[styles.button, loading && styles.buttonDisabled]}
-          onPress={handleLogin}
-          disabled={loading}
-        >
-          {loading ? (
-            <ActivityIndicator color={COLORS.white} />
-          ) : (
-            <Text style={styles.buttonText}>Login</Text>
-          )}
-        </Pressable>
+            <Text style={styles.label}>Enter OTP</Text>
+            <TextInput
+              style={styles.input}
+              value={otp}
+              onChangeText={setOtp}
+              placeholder="6-digit OTP"
+              keyboardType="number-pad"
+              maxLength={6}
+            />
 
-        <Pressable onPress={() => navigation.navigate('Register')}>
-          <Text style={styles.link}>
-            Don't have an account? <Text style={styles.linkBold}>Register</Text>
-          </Text>
-        </Pressable>
+            <Pressable
+              style={[styles.button, loading && styles.buttonDisabled]}
+              onPress={handleVerifyOtp}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator color={COLORS.white} />
+              ) : (
+                <Text style={styles.buttonText}>Verify & Login</Text>
+              )}
+            </Pressable>
+
+            <Pressable
+              onPress={() => {
+                setStep('phone');
+                setOtp('');
+                setError('');
+              }}
+            >
+              <Text style={styles.link}>
+                <Text style={styles.linkBold}>Change number</Text>
+              </Text>
+            </Pressable>
+          </>
+        )}
       </View>
     </KeyboardAvoidingView>
   );
@@ -118,6 +168,12 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     textAlign: 'center',
     marginBottom: 24,
+  },
+  otpHint: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
+    marginBottom: 16,
+    textAlign: 'center',
   },
   label: {
     fontSize: 14,

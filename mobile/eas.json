@@ -1,0 +1,30 @@
+{
+  "cli": {
+    "version": ">= 18.13.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_API_END_POINT": "https://astronaut-bagginess-landmark.ngrok-free.dev"
+      }
+    },
+    "preview": {
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_API_END_POINT": "https://astronaut-bagginess-landmark.ngrok-free.dev"
+      }
+    },
+    "production": {
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_API_END_POINT": "https://astronaut-bagginess-landmark.ngrok-free.dev"
+      }
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}
