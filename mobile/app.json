@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "employee-status-app",
-    "slug": "employee-status-app",
+    "name": "plumber-activity-app",
+    "slug": "plumber-activity-app",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -23,7 +23,7 @@
     },
     "extra": {
       "eas": {
-        "projectId": "c19c9f3e-0b41-484d-8fd5-7e9840d0ba3e"
+        "projectId": "facd3d68-843a-4acd-a28c-51f07cb29999"
       }
     }
   }

@@ -110,48 +110,99 @@ export default function DashboardScreen({ currentUser, onUserUpdate, onLogout })
           <Pressable
             style={[
               styles.statusButton,
-              styles.availableButton,
-              currentUser.status === 'available' && styles.statusButtonActive,
+              currentUser.status === 'available'
+                ? styles.availableButtonActive
+                : styles.availableButtonOutlined,
             ]}
             onPress={() => handleStatusChange('available')}
             disabled={!!pendingStatus}
           >
             {pendingStatus === 'available' ? (
-              <ActivityIndicator color={COLORS.white} size="small" />
+              <ActivityIndicator
+                color={
+                  currentUser.status === 'available'
+                    ? COLORS.white
+                    : STATUS_COLORS.available
+                }
+                size="small"
+              />
             ) : (
-              <Text style={styles.statusButtonText}>Available</Text>
+              <Text
+                style={[
+                  styles.statusButtonText,
+                  currentUser.status !== 'available' && {
+                    color: STATUS_COLORS.available,
+                  },
+                ]}
+              >
+                Available
+              </Text>
             )}
           </Pressable>
 
           <Pressable
             style={[
               styles.statusButton,
-              styles.workingButton,
-              currentUser.status === 'working' && styles.statusButtonActive,
+              currentUser.status === 'working'
+                ? styles.workingButtonActive
+                : styles.workingButtonOutlined,
             ]}
             onPress={() => handleStatusChange('working')}
             disabled={!!pendingStatus}
           >
             {pendingStatus === 'working' ? (
-              <ActivityIndicator color={COLORS.white} size="small" />
+              <ActivityIndicator
+                color={
+                  currentUser.status === 'working'
+                    ? COLORS.white
+                    : STATUS_COLORS.working
+                }
+                size="small"
+              />
             ) : (
-              <Text style={styles.statusButtonText}>Working</Text>
+              <Text
+                style={[
+                  styles.statusButtonText,
+                  currentUser.status !== 'working' && {
+                    color: STATUS_COLORS.working,
+                  },
+                ]}
+              >
+                Working
+              </Text>
             )}
           </Pressable>
         </View>
 
         <Pressable
           style={[
+            styles.statusButton,
             styles.offlineButton,
-            currentUser.status === 'offline' && styles.offlineButtonActive,
+            currentUser.status === 'offline'
+              ? styles.offlineButtonActive
+              : styles.offlineButtonOutlined,
           ]}
           onPress={() => handleStatusChange('offline')}
           disabled={!!pendingStatus}
         >
           {pendingStatus === 'offline' ? (
-            <ActivityIndicator color={COLORS.textSecondary} size="small" />
+            <ActivityIndicator
+              color={
+                currentUser.status === 'offline'
+                  ? COLORS.white
+                  : STATUS_COLORS.offline
+              }
+              size="small"
+            />
           ) : (
-            <Text style={styles.offlineButtonText}>Go Offline</Text>
+            <Text
+              style={[
+                styles.offlineButtonText,
+                currentUser.status === 'offline' && styles.offlineButtonTextActive,
+              ]}
+            >
+              Offline
+            </Text>
           )}
         </Pressable>
       </View>
@@ -229,18 +280,23 @@ const styles = StyleSheet.create({
     padding: 14,
     borderRadius: 10,
     alignItems: 'center',
-    opacity: 0.7,
-  },
-  statusButtonActive: {
-    opacity: 1,
     borderWidth: 2,
-    borderColor: COLORS.white,
   },
-  availableButton: {
+  availableButtonActive: {
     backgroundColor: STATUS_COLORS.available,
+    borderColor: STATUS_COLORS.available,
   },
-  workingButton: {
+  availableButtonOutlined: {
+    backgroundColor: 'transparent',
+    borderColor: STATUS_COLORS.available,
+  },
+  workingButtonActive: {
     backgroundColor: STATUS_COLORS.working,
+    borderColor: STATUS_COLORS.working,
+  },
+  workingButtonOutlined: {
+    backgroundColor: 'transparent',
+    borderColor: STATUS_COLORS.working,
   },
   statusButtonText: {
     color: COLORS.white,
@@ -248,21 +304,23 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   offlineButton: {
-    padding: 14,
-    borderRadius: 10,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: COLORS.background,
+    flex: undefined,
   },
   offlineButtonActive: {
+    backgroundColor: STATUS_COLORS.offline,
     borderColor: STATUS_COLORS.offline,
-    backgroundColor: '#F1F5F9',
+  },
+  offlineButtonOutlined: {
+    backgroundColor: 'transparent',
+    borderColor: STATUS_COLORS.offline,
   },
   offlineButtonText: {
-    color: COLORS.textSecondary,
-    fontWeight: '600',
+    color: STATUS_COLORS.offline,
+    fontWeight: '700',
     fontSize: 15,
+  },
+  offlineButtonTextActive: {
+    color: COLORS.white,
   },
   error: {
     color: COLORS.error,
