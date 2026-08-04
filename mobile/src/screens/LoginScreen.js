@@ -10,7 +10,7 @@ import {
   View,
 } from 'react-native';
 import { sendOtp, verifyOtp, getErrorMessage } from '../services/api';
-import { saveAuth } from '../services/authStorage';
+import { saveUser } from '../services/authStorage';
 import { COLORS } from '../constants/colors';
 
 export default function LoginScreen({ onLoginSuccess }) {
@@ -30,10 +30,7 @@ export default function LoginScreen({ onLoginSuccess }) {
 
     setLoading(true);
     try {
-      const response = await sendOtp(phoneNumber.trim());
-      if (response.data.devOtp) {
-        setOtp(response.data.devOtp);
-      }
+      await sendOtp(phoneNumber.trim());
       setStep('otp');
     } catch (err) {
       setError(getErrorMessage(err));
@@ -52,9 +49,8 @@ export default function LoginScreen({ onLoginSuccess }) {
 
     setLoading(true);
     try {
-      const response = await verifyOtp(phoneNumber.trim(), otp.trim());
-      const { token, user } = response.data;
-      await saveAuth(token, user);
+      const { user } = await verifyOtp(phoneNumber.trim(), otp.trim());
+      await saveUser(user);
       onLoginSuccess(user);
     } catch (err) {
       setError(getErrorMessage(err));

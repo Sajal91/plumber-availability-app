@@ -10,8 +10,7 @@ import {
 } from 'react-native';
 import { COLORS, STATUS_COLORS } from '../constants/colors';
 import { getMe, updateStatus, getErrorMessage } from '../services/api';
-import { connectSocket, disconnectSocket, getSocket } from '../services/socket';
-import { clearAuth, getToken, saveAuth } from '../services/authStorage';
+import { subscribeToPlumberUpdates } from '../services/realtime';
 
 export default function DashboardScreen({ currentUser, onUserUpdate, onLogout }) {
   const [pendingStatus, setPendingStatus] = useState(null);
@@ -20,8 +19,8 @@ export default function DashboardScreen({ currentUser, onUserUpdate, onLogout })
 
   const refreshProfile = useCallback(async () => {
     try {
-      const response = await getMe();
-      onUserUpdate(response.data.user);
+      const { user } = await getMe();
+      onUserUpdate(user);
       setError('');
     } catch (err) {
       setError(getErrorMessage(err));
@@ -29,21 +28,13 @@ export default function DashboardScreen({ currentUser, onUserUpdate, onLogout })
   }, [onUserUpdate]);
 
   useEffect(() => {
-    const socket = connectSocket();
-
-    socket.on('statusUpdated', ({ user: updatedUser }) => {
-      if (updatedUser && updatedUser.id === currentUser.id) {
+    const unsubscribe = subscribeToPlumberUpdates((updatedUser) => {
+      if (updatedUser.id === currentUser.id) {
         onUserUpdate(updatedUser);
       }
     });
 
-    return () => {
-      const activeSocket = getSocket();
-      if (activeSocket) {
-        activeSocket.off('statusUpdated');
-      }
-      disconnectSocket();
-    };
+    return unsubscribe;
   }, [currentUser.id, onUserUpdate]);
 
   const handleStatusChange = async (status) => {
@@ -52,13 +43,8 @@ export default function DashboardScreen({ currentUser, onUserUpdate, onLogout })
     setPendingStatus(status);
     setError('');
     try {
-      const response = await updateStatus(status);
-      const updatedUser = response.data.user;
+      const { user: updatedUser } = await updateStatus(status);
       onUserUpdate(updatedUser);
-      const token = await getToken();
-      if (token) {
-        await saveAuth(token, updatedUser);
-      }
     } catch (err) {
       setError(getErrorMessage(err));
     } finally {
@@ -73,8 +59,6 @@ export default function DashboardScreen({ currentUser, onUserUpdate, onLogout })
   };
 
   const handleLogout = async () => {
-    disconnectSocket();
-    await clearAuth();
     onLogout();
   };
 

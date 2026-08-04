@@ -11,8 +11,7 @@ import {
 import UserListItem from '../components/UserListItem';
 import { COLORS, STATUS_COLORS } from '../constants/colors';
 import { getPlumbers, getErrorMessage } from '../services/api';
-import { connectSocket, disconnectSocket, getSocket } from '../services/socket';
-import { clearAuth } from '../services/authStorage';
+import { subscribeToPlumberUpdates } from '../services/realtime';
 import { Dropdown } from 'react-native-element-dropdown';
 
 const STATUS_FILTERS = [
@@ -31,8 +30,8 @@ export default function AdminDashboardScreen({ currentUser, onLogout }) {
 
   const fetchPlumbers = useCallback(async () => {
     try {
-      const response = await getPlumbers();
-      setPlumbers(response.data.plumbers);
+      const { plumbers: list } = await getPlumbers();
+      setPlumbers(list);
       setError('');
     } catch (err) {
       setError(getErrorMessage(err));
@@ -48,26 +47,21 @@ export default function AdminDashboardScreen({ currentUser, onLogout }) {
 
     init();
 
-    const socket = connectSocket();
-
-    socket.on('plumbersList', (list) => {
-      setPlumbers(list);
+    const unsubscribe = subscribeToPlumberUpdates((updatedUser) => {
+      setPlumbers((prev) => {
+        const index = prev.findIndex((p) => p.id === updatedUser.id);
+        if (index === -1) {
+          return [...prev, updatedUser].sort((a, b) =>
+            a.name.localeCompare(b.name)
+          );
+        }
+        const next = [...prev];
+        next[index] = updatedUser;
+        return next;
+      });
     });
 
-    socket.on('statusUpdated', ({ plumbers: updatedList }) => {
-      if (updatedList) {
-        setPlumbers(updatedList);
-      }
-    });
-
-    return () => {
-      const activeSocket = getSocket();
-      if (activeSocket) {
-        activeSocket.off('plumbersList');
-        activeSocket.off('statusUpdated');
-      }
-      disconnectSocket();
-    };
+    return unsubscribe;
   }, [fetchPlumbers]);
 
   const handleRefresh = async () => {
@@ -77,8 +71,6 @@ export default function AdminDashboardScreen({ currentUser, onLogout }) {
   };
 
   const handleLogout = async () => {
-    disconnectSocket();
-    await clearAuth();
     onLogout();
   };
 
@@ -165,7 +157,8 @@ export default function AdminDashboardScreen({ currentUser, onLogout }) {
             </Text>
           }
         />
-      )}    </View>
+      )}
+    </View>
   );
 }
 

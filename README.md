@@ -1,16 +1,19 @@
 # Plumber Availability Tracker
 
-Real-time plumber availability tracking platform with a single mobile app for admins and plumbers.
+Real-time plumber availability tracking with a single Expo app for admins and plumbers.
 
-- **Backend:** Node.js + Express + MongoDB + Socket.io + JWT + OTP auth
+- **Backend:** Supabase (Postgres + Auth Phone OTP + RLS + Realtime + Edge Functions)
 - **Mobile:** Expo (React Native) — admins and plumbers both login via phone + OTP
 
 ## Project Structure
 
 ```
 plumber-availability-app/
-├── backend/          # Express API
-└── mobile/           # Expo app (admin + plumber)
+├── mobile/                 # Expo app (admin + plumber)
+├── supabase/
+│   ├── functions/          # Edge Functions (invite-only OTP gate)
+│   └── migrations/         # SQL migrations (reference)
+└── scripts/                # Seed Auth users + profiles
 ```
 
 ---
@@ -18,58 +21,62 @@ plumber-availability-app/
 ## Prerequisites
 
 - [Node.js](https://nodejs.org/) (v18+)
-- [MongoDB](https://www.mongodb.com/) running locally or MongoDB Atlas
+- A [Supabase](https://supabase.com/) project
+- Phone Auth enabled in Supabase (Twilio or MessageBird SMS provider)
 - [Expo Go](https://expo.dev/go) on your phone
-- Phone and computer on the **same Wi-Fi network** (for mobile testing)
 
 ---
 
-## Backend Setup
+## Supabase Setup
 
-### 1. Install dependencies
+### 1. Enable Phone Auth
+
+In the Supabase Dashboard:
+
+1. **Authentication → Providers → Phone** — enable Phone
+2. Configure Twilio (or MessageBird) credentials
+3. Optionally add test phone numbers for local development
+
+### 2. Schema
+
+Migrations are applied to the linked project (`profiles` table, RLS, Realtime, `is_phone_registered` RPC).
+
+Reference SQL lives in [`supabase/migrations`](supabase/migrations).
+
+### 3. Edge Function
+
+`request-otp` checks that a phone is invite-listed before the mobile client calls `signInWithOtp`.
+
+Deployed as: `request-otp` (JWT verification off — used before login).
+
+### 4. Seed users
 
 ```bash
-cd backend
 npm install
-```
-
-### 2. Configure environment
-
-Copy `.env.example` to `.env`:
-
-```env
-MONGO_URI=mongodb://localhost:27017/plumber-availability
-JWT_SECRET=your-super-secret-jwt-key-change-this
-PORT=5000
-OTP_DEV_MODE=true
-```
-
-Set `OTP_DEV_MODE=true` during development to return the OTP in API responses and log it in the server console. Disable in production and integrate an SMS provider in `backend/src/services/otpService.js`.
-
-### 3. Seed users
-
-```bash
+cp scripts/.env.example scripts/.env
+# set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY
+set -a && source scripts/.env && set +a   # or export vars in your shell
 npm run seed
 ```
 
-This creates:
+On Windows PowerShell:
+
+```powershell
+$env:SUPABASE_URL="https://YOUR_PROJECT.supabase.co"
+$env:SUPABASE_SERVICE_ROLE_KEY="YOUR_SERVICE_ROLE_KEY"
+npm run seed
+```
+
+Seed accounts (E.164 / local 10-digit):
 
 | Role | Name | Phone |
 |------|------|-------|
-| Admin | Admin | 9999999999 |
-| Plumber | John Plumber | 9876543210 |
-| Plumber | Mike Plumber | 9876543211 |
-| Plumber | Sarah Plumber | 9876543212 |
+| Admin | Admin | +919999999999 (`9999999999`) |
+| Plumber | John Plumber | +919876543210 |
+| Plumber | Mike Plumber | +919876543211 |
+| Plumber | Sarah Plumber | +919876543212 |
 
-Users must be pre-created by an admin/seed — there is no self-registration.
-
-### 4. Start the server
-
-```bash
-npm run dev
-```
-
-Server runs at `http://localhost:5000`.
+Users must be pre-created — there is no self-registration.
 
 ---
 
@@ -82,15 +89,14 @@ cd mobile
 npm install
 ```
 
-### 2. Configure API URL
+### 2. Configure env
 
-Set `EXPO_PUBLIC_API_END_POINT` in `mobile/.env`:
+Copy `.env.example` to `.env`:
 
 ```env
-EXPO_PUBLIC_API_END_POINT=http://192.168.1.100:5000
+EXPO_PUBLIC_SUPABASE_URL=https://YOUR_PROJECT.supabase.co
+EXPO_PUBLIC_SUPABASE_ANON_KEY=YOUR_ANON_KEY
 ```
-
-Use your computer's LAN IP (not `localhost`).
 
 ### 3. Start Expo
 
@@ -102,8 +108,8 @@ Scan the QR code with **Expo Go**.
 
 ### Login (admin & plumber)
 
-1. Enter registered phone number
-2. Send OTP → verify (check server console if `OTP_DEV_MODE=true`)
+1. Enter registered phone number (10-digit local or `+91…`)
+2. Send OTP → verify SMS code
 3. App opens the correct screen based on role:
 
 | Role | Screen |
@@ -115,26 +121,19 @@ Plumbers cannot see other plumbers. Admins see all plumbers but cannot update st
 
 ---
 
-## API Endpoints
+## Data & Auth model
 
-| Method | Endpoint | Auth | Role | Description |
-|--------|----------|------|------|-------------|
-| POST | `/api/auth/send-otp` | No | — | Send OTP to registered phone |
-| POST | `/api/auth/verify-otp` | No | — | Verify OTP → JWT |
-| GET | `/api/users/me` | Yes | Any | Current user profile |
-| GET | `/api/users/plumbers` | Yes | Admin | All plumbers with status |
-| PUT | `/api/users/status` | Yes | Plumber | Update own status |
+| Concern | Implementation |
+|---------|----------------|
+| Users | `auth.users` (phone) + `public.profiles` |
+| Invite-only | Edge Function `request-otp` + profile must exist after verify |
+| Admin list / plumber status | PostgREST + RLS |
+| Live updates | Supabase Realtime `postgres_changes` on `profiles` |
 
-**Auth header:** `Authorization: Bearer <token>`
+### Profile fields
 
----
-
-## Socket.io Events
-
-| Event | Direction | Payload |
-|-------|-----------|---------|
-| `plumbersList` | Server → Client | Full plumber list on connect |
-| `statusUpdated` | Server → All | `{ user, plumbers }` on status change |
+- `role`: `admin` | `plumber`
+- `status`: `available` | `working` | `offline`
 
 ---
 
@@ -152,6 +151,7 @@ Plumbers cannot see other plumbers. Admins see all plumbers but cannot update st
 
 | Issue | Fix |
 |-------|-----|
-| "Phone number not registered" | Run `npm run seed` in backend |
-| OTP not received | Check server console; enable `OTP_DEV_MODE=true` |
-| Cannot reach server on mobile | Check `EXPO_PUBLIC_API_END_POINT`, same Wi-Fi, firewall |
+| "Phone number not registered" | Run `npm run seed` with service role key |
+| OTP not received | Enable Phone Auth + Twilio in Supabase Dashboard; check SMS logs |
+| Cannot reach Supabase | Check `EXPO_PUBLIC_SUPABASE_URL` / anon key and device network |
+| Profile missing after OTP | User exists in Auth but not in `profiles` — re-run seed |

@@ -1,17 +1,13 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const TOKEN_KEY = '@plumber_auth_token';
 const USER_KEY = '@plumber_auth_user';
 
-export const saveAuth = async (token, user) => {
-  await AsyncStorage.multiSet([
-    [TOKEN_KEY, token],
-    [USER_KEY, JSON.stringify(user)],
-  ]);
-};
-
-export const getToken = async () => {
-  return AsyncStorage.getItem(TOKEN_KEY);
+/**
+ * Cache the latest profile locally for fast UI restore.
+ * Session tokens are persisted by the Supabase client.
+ */
+export const saveUser = async (user) => {
+  await AsyncStorage.setItem(USER_KEY, JSON.stringify(user));
 };
 
 export const getUser = async () => {
@@ -20,5 +16,5 @@ export const getUser = async () => {
 };
 
 export const clearAuth = async () => {
-  await AsyncStorage.multiRemove([TOKEN_KEY, USER_KEY]);
+  await AsyncStorage.removeItem(USER_KEY);
 };

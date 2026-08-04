@@ -1,4 +1,2 @@
-const API_END_POINT = process.env.EXPO_PUBLIC_API_END_POINT;
-
-export const API_BASE_URL = `${API_END_POINT}/api`;
-export const SOCKET_URL = API_END_POINT;
+export const SUPABASE_URL = process.env.EXPO_PUBLIC_SUPABASE_URL;
+export const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
