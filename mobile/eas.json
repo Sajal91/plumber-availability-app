@@ -18,9 +18,13 @@
       }
     },
     "production": {
+      "android": {
+        "buildType": "apk"
+      },
       "autoIncrement": true,
       "env": {
-        "EXPO_PUBLIC_API_END_POINT": "https://astronaut-bagginess-landmark.ngrok-free.dev"
+        "EXPO_PUBLIC_SUPABASE_URL": "https://lhmeiziqzhnaemkxheds.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_4NAlHq82QGBsBmTjwZcZ3Q_vFxOSBtM"
       }
     }
   },

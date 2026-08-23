@@ -11,7 +11,7 @@ Real-time plumber availability tracking with a single Expo app for admins and pl
 plumber-availability-app/
 ├── mobile/                 # Expo app (admin + plumber)
 ├── supabase/
-│   ├── functions/          # Edge Functions (invite-only OTP gate)
+│   ├── functions/          # Edge Functions (OTP gate + admin user mgmt)
 │   └── migrations/         # SQL migrations (reference)
 └── scripts/                # Seed Auth users + profiles
 ```
@@ -43,11 +43,14 @@ Migrations are applied to the linked project (`profiles` table, RLS, Realtime, `
 
 Reference SQL lives in [`supabase/migrations`](supabase/migrations).
 
-### 3. Edge Function
+### 3. Edge Functions
 
-`request-otp` checks that a phone is invite-listed before the mobile client calls `signInWithOtp`.
+| Function | Purpose | JWT |
+|----------|---------|-----|
+| `request-otp` | Invite-only gate before `signInWithOtp` | Off (pre-login) |
+| `manage-users` | Admin add/remove plumbers (Auth + profile) | On (admin session) |
 
-Deployed as: `request-otp` (JWT verification off — used before login).
+Admins can add or remove plumbers from the Admin Panel. Only users who exist in Auth + `profiles` can log in.
 
 ### 4. Seed users
 
@@ -114,10 +117,10 @@ Scan the QR code with **Expo Go**.
 
 | Role | Screen |
 |------|--------|
-| **Admin** | Plumber list with live status, stats, and **Call** buttons |
+| **Admin** | Plumber list with live status, stats, **Add** / **Remove**, and **Call** |
 | **Plumber** | Own status only — Available, Working, or Offline |
 
-Plumbers cannot see other plumbers. Admins see all plumbers but cannot update status.
+Plumbers cannot see other plumbers. Admins manage who can log in (add/remove plumbers) but cannot update plumber status.
 
 ---
 
@@ -127,6 +130,7 @@ Plumbers cannot see other plumbers. Admins see all plumbers but cannot update st
 |---------|----------------|
 | Users | `auth.users` (phone) + `public.profiles` |
 | Invite-only | Edge Function `request-otp` + profile must exist after verify |
+| Admin user management | Edge Function `manage-users` (create/delete Auth + profile) |
 | Admin list / plumber status | PostgREST + RLS |
 | Live updates | Supabase Realtime `postgres_changes` on `profiles` |
 
@@ -151,7 +155,7 @@ Plumbers cannot see other plumbers. Admins see all plumbers but cannot update st
 
 | Issue | Fix |
 |-------|-----|
-| "Phone number not registered" | Run `npm run seed` with service role key |
+| "Phone number not registered" | Add the user from Admin Panel (or run `npm run seed`) |
 | OTP not received | Enable Phone Auth + Twilio in Supabase Dashboard; check SMS logs |
 | Cannot reach Supabase | Check `EXPO_PUBLIC_SUPABASE_URL` / anon key and device network |
 | Profile missing after OTP | User exists in Auth but not in `profiles` — re-run seed |

@@ -1,16 +1,26 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
   Pressable,
   RefreshControl,
   StyleSheet,
   Text,
+  TextInput,
   View,
 } from 'react-native';
 import UserListItem from '../components/UserListItem';
 import { COLORS, STATUS_COLORS } from '../constants/colors';
-import { getPlumbers, getErrorMessage } from '../services/api';
+import {
+  createPlumber,
+  deletePlumber,
+  getPlumbers,
+  getErrorMessage,
+} from '../services/api';
 import { subscribeToPlumberUpdates } from '../services/realtime';
 import { Dropdown } from 'react-native-element-dropdown';
 
@@ -27,6 +37,12 @@ export default function AdminDashboardScreen({ currentUser, onLogout }) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState('');
+  const [addVisible, setAddVisible] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newPhone, setNewPhone] = useState('');
+  const [adding, setAdding] = useState(false);
+  const [addError, setAddError] = useState('');
+  const [removingId, setRemovingId] = useState(null);
 
   const fetchPlumbers = useCallback(async () => {
     try {
@@ -74,6 +90,79 @@ export default function AdminDashboardScreen({ currentUser, onLogout }) {
     onLogout();
   };
 
+  const openAddModal = () => {
+    setNewName('');
+    setNewPhone('');
+    setAddError('');
+    setAddVisible(true);
+  };
+
+  const closeAddModal = () => {
+    if (adding) return;
+    setAddVisible(false);
+    setAddError('');
+  };
+
+  const handleAddPlumber = async () => {
+    setAddError('');
+
+    if (!newName.trim()) {
+      setAddError('Please enter a name');
+      return;
+    }
+    if (!newPhone.trim()) {
+      setAddError('Please enter a mobile number');
+      return;
+    }
+
+    setAdding(true);
+    try {
+      const { plumber } = await createPlumber(newName.trim(), newPhone.trim());
+      if (plumber) {
+        setPlumbers((prev) =>
+          [...prev.filter((p) => p.id !== plumber.id), plumber].sort((a, b) =>
+            a.name.localeCompare(b.name)
+          )
+        );
+      } else {
+        await fetchPlumbers();
+      }
+      setAddVisible(false);
+      setNewName('');
+      setNewPhone('');
+    } catch (err) {
+      setAddError(getErrorMessage(err));
+    } finally {
+      setAdding(false);
+    }
+  };
+
+  const handleRemovePlumber = (user) => {
+    Alert.alert(
+      'Remove plumber',
+      `Remove ${user.name}? They will no longer be able to log in.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Remove',
+          style: 'destructive',
+          onPress: async () => {
+            setRemovingId(user.id);
+            setError('');
+            try {
+              await deletePlumber(user.id);
+              setPlumbers((prev) => prev.filter((p) => p.id !== user.id));
+            } catch (err) {
+              setError(getErrorMessage(err));
+            } finally {
+              setRemovingId(null);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const availableCount = plumbers.filter((p) => p.status === 'available').length;
   const workingCount = plumbers.filter((p) => p.status === 'working').length;
   const offlineCount = plumbers.filter((p) => p.status === 'offline').length;
@@ -83,7 +172,13 @@ export default function AdminDashboardScreen({ currentUser, onLogout }) {
       ? plumbers
       : plumbers.filter((p) => p.status === statusFilter);
 
-  const renderPlumber = ({ item }) => <UserListItem user={item} />;
+  const renderPlumber = ({ item }) => (
+    <UserListItem
+      user={item}
+      onRemove={handleRemovePlumber}
+      removing={removingId === item.id}
+    />
+  );
 
   return (
     <View style={styles.container}>
@@ -122,18 +217,23 @@ export default function AdminDashboardScreen({ currentUser, onLogout }) {
 
       <View style={styles.listHeader}>
         <Text style={styles.sectionTitle}>All Plumbers</Text>
-        <Dropdown
-          style={styles.dropdown}
-          containerStyle={styles.dropdownContainer}
-          placeholderStyle={styles.dropdownPlaceholder}
-          selectedTextStyle={styles.dropdownSelectedText}
-          data={STATUS_FILTERS}
-          labelField="label"
-          valueField="value"
-          placeholder="Filter"
-          value={statusFilter}
-          onChange={(item) => setStatusFilter(item.value)}
-        />
+        <View style={styles.listHeaderActions}>
+          <Pressable style={styles.addButton} onPress={openAddModal}>
+            <Text style={styles.addButtonText}>Add</Text>
+          </Pressable>
+          <Dropdown
+            style={styles.dropdown}
+            containerStyle={styles.dropdownContainer}
+            placeholderStyle={styles.dropdownPlaceholder}
+            selectedTextStyle={styles.dropdownSelectedText}
+            data={STATUS_FILTERS}
+            labelField="label"
+            valueField="value"
+            placeholder="Filter"
+            value={statusFilter}
+            onChange={(item) => setStatusFilter(item.value)}
+          />
+        </View>
       </View>
 
       {loading ? (
@@ -152,12 +252,76 @@ export default function AdminDashboardScreen({ currentUser, onLogout }) {
           ListEmptyComponent={
             <Text style={styles.emptyText}>
               {statusFilter === 'all'
-                ? 'No plumbers registered yet.'
+                ? 'No plumbers registered yet. Tap Add to invite one.'
                 : `No ${statusFilter} plumbers right now.`}
             </Text>
           }
         />
       )}
+
+      <Modal
+        visible={addVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={closeAddModal}
+      >
+        <KeyboardAvoidingView
+          style={styles.modalOverlay}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
+          <Pressable style={styles.modalBackdrop} onPress={closeAddModal} />
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Add plumber</Text>
+            <Text style={styles.modalSubtitle}>
+              Only added users can request OTP and log in.
+            </Text>
+
+            {addError ? <Text style={styles.error}>{addError}</Text> : null}
+
+            <Text style={styles.label}>Name</Text>
+            <TextInput
+              style={styles.input}
+              value={newName}
+              onChangeText={setNewName}
+              placeholder="Plumber name"
+              autoCapitalize="words"
+              editable={!adding}
+            />
+
+            <Text style={styles.label}>Mobile Number</Text>
+            <TextInput
+              style={styles.input}
+              value={newPhone}
+              onChangeText={setNewPhone}
+              placeholder="10-digit or +91…"
+              keyboardType="phone-pad"
+              autoCapitalize="none"
+              editable={!adding}
+            />
+
+            <View style={styles.modalActions}>
+              <Pressable
+                style={[styles.modalSecondary, adding && styles.buttonDisabled]}
+                onPress={closeAddModal}
+                disabled={adding}
+              >
+                <Text style={styles.modalSecondaryText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                style={[styles.modalPrimary, adding && styles.buttonDisabled]}
+                onPress={handleAddPlumber}
+                disabled={adding}
+              >
+                {adding ? (
+                  <ActivityIndicator color={COLORS.white} />
+                ) : (
+                  <Text style={styles.modalPrimaryText}>Add plumber</Text>
+                )}
+              </Pressable>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
 }
@@ -234,6 +398,23 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     gap: 12,
   },
+  listHeaderActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  addButton: {
+    backgroundColor: COLORS.primary,
+    paddingHorizontal: 14,
+    height: 40,
+    borderRadius: 8,
+    justifyContent: 'center',
+  },
+  addButtonText: {
+    color: COLORS.white,
+    fontWeight: '700',
+    fontSize: 14,
+  },
   dropdown: {
     width: 130,
     height: 40,
@@ -276,5 +457,84 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     marginBottom: 16,
     fontSize: 14,
+  },
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    padding: 24,
+  },
+  modalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(15, 23, 42, 0.45)',
+  },
+  modalCard: {
+    backgroundColor: COLORS.surface,
+    borderRadius: 16,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: COLORS.text,
+  },
+  modalSubtitle: {
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    marginTop: 6,
+    marginBottom: 16,
+  },
+  label: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.text,
+    marginBottom: 6,
+  },
+  input: {
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    fontSize: 16,
+    color: COLORS.text,
+    backgroundColor: COLORS.background,
+    marginBottom: 14,
+  },
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 10,
+    marginTop: 4,
+  },
+  modalSecondary: {
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.surface,
+  },
+  modalSecondaryText: {
+    color: COLORS.textSecondary,
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  modalPrimary: {
+    minWidth: 120,
+    alignItems: 'center',
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderRadius: 8,
+    backgroundColor: COLORS.primary,
+  },
+  modalPrimaryText: {
+    color: COLORS.white,
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  buttonDisabled: {
+    opacity: 0.6,
   },
 });

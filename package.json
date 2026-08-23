@@ -5,6 +5,7 @@
     "seed": "node scripts/seed-users.js"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.50.0"
+    "@supabase/supabase-js": "^2.50.0",
+    "expo": "^57.0.0"
   }
 }

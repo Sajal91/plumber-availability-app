@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "c2df3771-a757-4b62-9158-0f9ebefbb30e"
+      }
+    },
+    "android": {
+      "package": "com.sajalkapoor.plumberavailabilityapp"
+    }
+  }
+}

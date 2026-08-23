@@ -166,6 +166,56 @@ export const getPlumbers = async () => {
   return { plumbers: (data || []).map(mapProfile) };
 };
 
+/**
+ * Admin-only: create Auth user + plumber profile so they can log in.
+ */
+export const createPlumber = async (name, phoneNumber) => {
+  const phone = normalizePhone(phoneNumber);
+  if (!name?.trim()) {
+    throwApiError('Enter a plumber name', 400);
+  }
+  if (!phone) {
+    throwApiError('Enter a valid phone number', 400);
+  }
+
+  const { data, error } = await supabase.functions.invoke('manage-users', {
+    body: { action: 'create', name: name.trim(), phoneNumber: phone },
+  });
+
+  if (error) {
+    const message = await readFunctionErrorMessage(error, data);
+    throwApiError(message, error.context?.status || 400);
+  }
+
+  return {
+    message: data?.message || 'Plumber added successfully',
+    plumber: data?.plumber,
+  };
+};
+
+/**
+ * Admin-only: delete Auth user (cascades profile) so they can no longer log in.
+ */
+export const deletePlumber = async (userId) => {
+  if (!userId) {
+    throwApiError('User id is required', 400);
+  }
+
+  const { data, error } = await supabase.functions.invoke('manage-users', {
+    body: { action: 'delete', userId },
+  });
+
+  if (error) {
+    const message = await readFunctionErrorMessage(error, data);
+    throwApiError(message, error.context?.status || 400);
+  }
+
+  return {
+    message: data?.message || 'Plumber removed successfully',
+    userId: data?.userId || userId,
+  };
+};
+
 export const updateStatus = async (status) => {
   const {
     data: { user },

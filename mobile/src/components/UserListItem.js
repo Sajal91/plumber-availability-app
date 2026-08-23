@@ -7,7 +7,12 @@ const STATUS_LABELS = {
   offline: 'Offline',
 };
 
-export default function UserListItem({ user, isCurrentUser = false }) {
+export default function UserListItem({
+  user,
+  isCurrentUser = false,
+  onRemove,
+  removing = false,
+}) {
   const statusColor = STATUS_COLORS[user.status] || STATUS_COLORS.offline;
 
   const handleCall = () => {
@@ -25,11 +30,25 @@ export default function UserListItem({ user, isCurrentUser = false }) {
         <Text style={[styles.status, { color: statusColor }]}>
           {STATUS_LABELS[user.status] || 'Offline'}
         </Text>
+        {user.phoneNumber ? (
+          <Text style={styles.phone}>{user.phoneNumber}</Text>
+        ) : null}
       </View>
       {!isCurrentUser && (
-        <Pressable style={styles.callButton} onPress={handleCall}>
-          <Text style={styles.callButtonText}>Call</Text>
-        </Pressable>
+        <View style={styles.actions}>
+          <Pressable style={styles.callButton} onPress={handleCall}>
+            <Text style={styles.callButtonText}>Call</Text>
+          </Pressable>
+          {onRemove ? (
+            <Pressable
+              style={[styles.removeButton, removing && styles.buttonDisabled]}
+              onPress={() => onRemove(user)}
+              disabled={removing}
+            >
+              <Text style={styles.removeButtonText}>Remove</Text>
+            </Pressable>
+          ) : null}
+        </View>
       )}
     </View>
   );
@@ -69,9 +88,19 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '500',
   },
+  phone: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+    marginTop: 2,
+  },
+  actions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   callButton: {
     backgroundColor: COLORS.primary,
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 8,
   },
@@ -79,5 +108,21 @@ const styles = StyleSheet.create({
     color: COLORS.white,
     fontWeight: '600',
     fontSize: 14,
+  },
+  removeButton: {
+    backgroundColor: COLORS.surface,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: COLORS.error,
+  },
+  removeButtonText: {
+    color: COLORS.error,
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  buttonDisabled: {
+    opacity: 0.5,
   },
 });
